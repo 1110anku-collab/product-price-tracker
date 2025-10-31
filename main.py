@@ -15,6 +15,7 @@ Features:
 import sys
 import logging
 from pathlib import Path
+import os  # ✅ Added for safe path handling
 
 # ------------------------------------------------------------
 # DPI fix for Windows (avoids blurry GUI on high-DPI screens)
@@ -29,12 +30,24 @@ except Exception:
 # ------------------------------------------------------------
 # Configuration and Logging
 # ------------------------------------------------------------
+# ✅ Fix: make sure Python looks for config.py in the same folder as this script
 try:
+    os.chdir(Path(__file__).parent)
+    config_path = Path("config.py")
+    if not config_path.exists():
+        print(f"❌ Missing config.py! Checked path: {config_path.resolve()}")
+        sys.exit(1)
+
     from config import Config
+    print(f"✅ Found config.py at: {config_path.resolve()}")
+
 except ImportError:
-    print("❌ Missing config.py! Please ensure it exists in your project folder.")
+    print("❌ Import error: config.py found but could not be imported.")
     sys.exit(1)
 
+# ------------------------------------------------------------
+# Logging setup
+# ------------------------------------------------------------
 LOGS_DIR = Path(getattr(Config, "LOGS_DIR", Path("./logs")))
 LOGS_DIR.mkdir(exist_ok=True)
 
