@@ -1,0 +1,70 @@
+{
+  // Include all project files for analysis
+  "include": ["."],
+
+  // Exclude unnecessary folders from type checking
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    ".git",
+    "venv/**",
+    "build/**",
+    "dist/**",
+    "*.egg-info/**"
+  ],
+
+  // Virtual environment configuration
+  "venvPath": ".",
+  "venv": "venv",
+
+  // Python environment info
+  "pythonVersion": "3.13",
+  "pythonPlatform": "Windows",
+
+  // Type checking level
+  "typeCheckingMode": "basic",
+
+  // Import & stub handling
+  "reportMissingImports": "warning",
+  "reportMissingTypeStubs": false,
+
+  // Code cleanliness and unused checks
+  "reportUnusedImport": false,
+  "reportUnusedClass": false,
+  "reportUnusedFunction": false,
+  "reportUnusedVariable": false,
+  "reportDuplicateImport": true,
+
+  // Optional / loose typing behavior
+  "reportOptionalMemberAccess": false,
+  "reportOptionalSubscript": false,
+  "reportOptionalCall": false,
+  "reportOptionalIterable": false,
+  "reportOptionalOperand": false,
+
+  // Disable noisy warnings that are safe to ignore for GUI/scraping apps
+  "reportPrivateImportUsage": false,
+  "reportGeneralTypeIssues": false,
+  "reportConstantRedefinition": false,
+  "reportIncompatibleMethodOverride": false,
+  "reportIncompatibleVariableOverride": false,
+  "reportUntypedFunctionDecorator": false,
+  "reportUntypedClassDecorator": false,
+  "reportUntypedBaseClass": false,
+  "reportUnnecessaryIsInstance": false,
+  "reportUnnecessaryComparison": false,
+
+  // Advanced: improve performance and reduce noise
+  "executionEnvironments": [
+    {
+      "root": ".",
+      "pythonVersion": "3.13",
+      "extraPaths": [
+        "./src",
+        "./app",
+        "./database",
+        "./modules"
+      ]
+    }
+  ]
+}

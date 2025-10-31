@@ -1,0 +1,8 @@
+{
+  "theme": "dark",
+  "sound_enabled": true,
+  "email_notifications": true,
+  "desktop_notifications": true,
+  "default_currency": "INR",
+  "check_frequency": 30
+}

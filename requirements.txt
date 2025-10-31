@@ -1,0 +1,49 @@
+##############################################
+# ✅ Price Tracker Pro — Python Requirements
+# Modern GUI + Web Scraping + Analytics
+##############################################
+
+# --- GUI Framework ---
+customtkinter==5.2.1
+pillow==10.1.0
+
+# --- Web Scraping & Parsing ---
+requests==2.31.0
+beautifulsoup4==4.12.2
+lxml==4.9.3
+
+# --- Scheduling ---
+schedule==1.2.0
+
+# --- Data Visualization ---
+matplotlib==3.8.2
+plotly==5.18.0
+kaleido==0.2.1
+
+# --- Notifications ---
+plyer==2.1.0
+
+# --- Email & Configuration ---
+python-dotenv==1.0.0
+
+# --- Data Export ---
+openpyxl==3.1.2
+
+# --- Currency API ---
+forex-python==1.8
+
+# --- Data Analysis & Utilities ---
+pandas==2.1.4
+numpy==1.26.2
+pyperclip==1.8.2
+
+# --- Browser Automation (Optional) ---
+selenium==4.27.1
+webdriver-manager==4.0.2
+
+# --- Type Checking / Editor Helpers (Optional) ---
+types-requests
+types-beautifulsoup4
+types-pillow
+types-pandas
+types-numpy
