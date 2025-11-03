@@ -1,160 +1,113 @@
 # 🏷️ Price Tracker Pro
 
-A comprehensive Python application for automated price tracking with email alerts, desktop notifications, and analytics dashboard.
+**Automated product tracking with smart scraping, background scheduling, and real-time alerts — built with Python 3.11 and CustomTkinter.**
 
-![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
-![CustomTkinter](https://img.shields.io/badge/GUI-CustomTkinter-green.svg)
-![License](https://img.shields.io/badge/License-MIT-yellow.svg)
+## 💡 Overview  
+Product Price Tracker is a standalone desktop tool that continuously monitors prices from multiple e-commerce platforms.  
+It automatically fetches, analyzes, and logs product data — helping you spot discounts instantly through email or desktop notifications.  
 
-## ✨ Features
+No browser extensions. No manual refreshes. Just plug in product URLs, and the tracker does the rest.
 
-### Core Functionality (20 Features)
+## ✨ Core Features  
 
-1. **Multi-Product Tracking** - Track unlimited products simultaneously
-2. **Customizable Check Frequency** - 5min, 10min, 30min, 1hr, 12hr intervals
-3. **Email Alerts** - Automatic email notifications when price drops
-4. **Desktop Notifications** - Windows toast notifications
-5. **Sound Alerts** - Optional audio alerts for price drops
-6. **Price History Graphs** - Visual price trends with Matplotlib
-7. **Dark/Light Mode** - Customizable theme support
-8. **User Authentication** - Secure login system with SQLite
-9. **Data Export** - Export to CSV and Excel formats
-10. **Currency Support** - Multiple currency conversion
-11. **Smart Web Scraping** - Works with Amazon, eBay, Walmart, Target, and generic sites
-12. **Error Handling & Retry** - Automatic retry on failures with logging
-13. **Secure Email Storage** - Credentials stored in .env file
-14. **Custom Email Templates** - Beautiful HTML email alerts
-15. **Dashboard Summary** - Real-time product status overview
-16. **Background Threading** - Non-blocking price checks
-17. **Search & Filter** - Easy product management
-18. **Auto-Save** - Automatic data persistence
-19. **Comprehensive Logging** - Track all operations
-20. **Product Status Tracking** - Active/Paused/Error states
+### 🧩 Tracking & Monitoring
+- Track **unlimited products** simultaneously  
+- Support for **Amazon, Flipkart, Meesho, Myntra**, and most major sites  
+- Adjustable check frequency (5 min → 12 hrs)  
+- Smart retry system for failed requests  
 
-### GUI Components
+### 📦 Data Handling
+- Local SQLite database with persistent product history  
+- Optional JSON user data (`users.json`) for lightweight setups  
+- Real-time logging in `/logs/` for debugging and analysis  
 
-- **Home Tab** - Add new products to track
-- **Dashboard Tab** - View and manage all tracked products
-- **Graph Tab** - Price history visualization (Now with scrollable view for better visualization)
-- **Settings Tab** - Configure app preferences
+### 🖥️ GUI & Visualization
+- Clean, modern interface powered by **CustomTkinter**  
+- Live dashboard showing all tracked products  
+- Product cards include images, prices, and timestamps  
+- Matplotlib graphs for price trends  
 
-## 🚀 Installation
+### 🔔 Notifications
+- **Email alerts** for price drops (via SMTP, stored securely in `.env`)  
+- **Desktop notifications** using **Plyer**  
+- Optional sound alerts  
 
-### Prerequisites
+### 🛠️ Advanced Capabilities
+- Multi-scraper logic in `combine_scraper.py` (for hybrid scraping)  
+- Debugging utilities in `debug_product_fetching.py`  
+- Currency conversion support via `currency_converter.py`  
+- Configurable settings via `config.json`  
+- Background job management with `scheduler.py`  
 
-- Python 3.8 or higher
-- Windows 10+ (for desktop notifications)
-- Internet connection
+---
 
-### Step 1: Clone or Download
+## 🧰 Tech Stack  
 
+| Layer | Technology |
+|-------|-------------|
+| GUI | CustomTkinter |
+| Scraping | Requests + BeautifulSoup |
+| Data | SQLite3 + JSON |
+| Visualization | Matplotlib |
+| Alerts | Plyer + smtplib |
+| Config | python-dotenv |
+| OS | Windows 10+ |
+
+
+
+## ⚙️ Installation  
+
+### 1️⃣ Clone the Repository
 ```bash
-cd price-tracker-pro
+git clone https://github.com/yourusername/product-price-tracker.git
+cd product-price-tracker
+
+### 2️⃣ Create and Activate Virtual Environment
 ```
-
-### Step 2: Install Dependencies
-
-```bash
+python -m venv venv
+venv\Scripts\activate
+```
+### 3️⃣ Install Dependencies
+```
 pip install -r requirements.txt
+
 ```
-
-### Step 3: Configure Email (Optional but Recommended)
-
-1. Copy `.env.template` to `.env`:
-   ```bash
-   copy .env.template .env
-   ```
-
-2. Edit `.env` file with your email settings:
-   ```env
-   EMAIL_ADDRESS=your_email@gmail.com
-   EMAIL_PASSWORD=your_app_password_here
-   SMTP_SERVER=smtp.gmail.com
-   SMTP_PORT=587
-   ```
-
-**For Gmail Users:**
-- Enable 2-Factor Authentication
-- Generate an App Password: https://myaccount.google.com/apppasswords
-- Use the App Password (not your regular password)
-
-## 📖 Usage
-
-### Running the Application
-
-```bash
+### 4️⃣ Configure ```.env```
+```
+EMAIL_ADDRESS=youremail@gmail.com
+EMAIL_PASSWORD=your_app_password
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+```
+### 5️⃣ Start the App
+```
 python main.py
 ```
-
-### First Time Setup
-
-1. **Register Account**
-   - Click "Register" tab
-   - Enter username and password
-   - Optionally add email
-   - Click "Create Account"
-
-2. **Login**
-   - Enter your credentials
-   - Click "Login"
-
-### Adding Products
-
-1. Go to **Home** tab
-2. Enter product URL (Amazon, eBay, Walmart, etc.)
-3. Set target price
-4. Choose check frequency
-5. Add notification email (optional)
-6. Click "Fetch & Add Product"
-
-### Managing Products
-
-**Dashboard Tab:**
-- **Check Now** - Manual price check
-- **Pause/Resume** - Toggle tracking
-- **Graph** - View price history
-- **Delete** - Remove product
-- **Start All** - Begin tracking all products
-- **Stop All** - Pause all tracking
-- **Export** - Save data to CSV/Excel
-
-### Viewing Price History
-
-1. Go to **Graph** tab
-2. Select product from dropdown
-3. View price trend chart
-
-### Settings
-
-Configure:
-- Theme (Dark/Light/System)
-- Email notifications
-- Desktop notifications
-- Sound alerts
-- Email configuration (New enhanced UI for setting up email credentials)
 
 ## 📁 Project Structure
 
 ```
-price-tracker-pro/
-├── main.py                    # Application entry point
-├── config.py                  # Configuration management
-├── database.py                # SQLite database handler
-├── scraper.py                 # Web scraping module
-├── scheduler.py               # Price check scheduler
-├── notifications.py           # Email & desktop notifications
-├── data_export.py             # CSV/Excel export
-├── currency_converter.py      # Currency conversion
-├── login_window.py            # Login GUI
-├── main_window.py             # Main application GUI
-├── requirements.txt           # Python dependencies
-├── .env.template              # Environment template
-├── README.md                  # Documentation
-├── data/                      # Data directory
-│   ├── price_tracker.db       # SQLite database
-│   └── exports/               # Exported files
-├── logs/                      # Application logs
-└── assets/                    # Assets (if any)
+PRODUCT-PRICE-TRACKER/
+├── assets/ # Icons, fonts, and image assets
+├── data/ # Product and export data
+├── logs/ # Log files (scraper, scheduler, etc.)
+├── .env # User email credentials (ignored by Git)
+├── .env.template # Example environment configuration
+├── advanced_features.py # Optional enhancements (e.g., automation)
+├── combine_scraper.py # Multi-website scraping handler
+├── config.json # Persistent user settings
+├── config.py # Configuration management logic
+├── currency_converter.py # Currency conversion handler
+├── database.py # SQLite operations and schema
+├── debug_product_fetching.py# Debugging tool for scraper verification
+├── main_window.py # CustomTkinter GUI dashboard
+├── main.py # Application entry point
+├── notifications.py # Email and desktop notification system
+├── scheduler.py # Background price-check manager
+├── scraper.py # Primary scraping functions
+├── start.bat # Quick launcher for Windows
+├── users.json # Stores user preferences
+└── requirements.txt # Dependency list
 ```
 
 ## 🔧 Configuration
@@ -189,24 +142,15 @@ SMTP_SERVER=smtp.mail.yahoo.com
 SMTP_PORT=587
 ```
 
+
 ## 🌐 Supported Websites
 
 ### Optimized For:
 - ✅ Amazon
-- ✅ eBay
-- ✅ Walmart
-- ✅ Target
 - ✅ Flipkart
 - ✅ Meesho
 - ✅ Myntra
 - ✅ Nykaa
-- ✅ Ajio
-- ✅ Snapdeal
-- ✅ Shopclues
-- ✅ Pepperfry
-- ✅ Croma
-- ✅ Blinkit
-- ✅ Firstcry
 
 ### Generic Support:
 - ✅ Most e-commerce websites with standard HTML structure
@@ -254,6 +198,8 @@ Logs are stored in `logs/` directory:
 - `notifications.log` - Email/notifications
 - `currency.log` - Currency conversion
 - `export.log` - Data exports
+
+
 
 ## 🔒 Security
 

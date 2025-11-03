@@ -132,43 +132,123 @@ class NotificationManager:
         recipient_email: str
     ) -> bool:
         """Send email notification for price change."""
+        # Check email configuration
+        if not Config.EMAIL_ADDRESS or not Config.EMAIL_PASSWORD:
+            logger.error("Email configuration missing: EMAIL_ADDRESS or EMAIL_PASSWORD not set in .env file")
+            return False
+            
+        if not Config.validate_email_config():
+            logger.error(f"Email configuration invalid. EMAIL_ADDRESS: {Config.EMAIL_ADDRESS[:5]}...@..., Password set: {bool(Config.EMAIL_PASSWORD)}")
+            return False
+            
         if not self.email_enabled:
             logger.warning("Email configuration not valid — skipping email alert.")
             return False
 
         try:
+            # Validate recipient email
+            if not recipient_email or "@" not in recipient_email:
+                logger.error(f"Invalid recipient email: {recipient_email}")
+                return False
+            
             msg = MIMEMultipart("alternative")
             msg["From"] = Config.EMAIL_ADDRESS
             msg["To"] = recipient_email
-            msg["Subject"] = f"🎉 Price Drop Alert: {product_name}"
+            
+            logger.info(f"Attempting to send email to {recipient_email} from {Config.EMAIL_ADDRESS}")
+            # Customize subject based on content
+            if "Tracking Started" in product_name:
+                msg["Subject"] = f"✅ Price Tracking Started: {product_name.replace('Price Tracking Started: ', '')}"
+            else:
+                msg["Subject"] = f"🎉 Price Drop Alert: {product_name}"
 
-            html_body = self._create_email_template(product_name, current_price, target_price, product_url)
-            text_body = (
-                f"Price Drop Alert!\n\n"
-                f"Product: {product_name}\n"
-                f"Now: ₹{current_price:.2f}\n"
-                f"Target: ₹{target_price:.2f}\n"
-                f"Link: {product_url}\n\n"
-                f"Sent by Price Tracker Pro on {datetime.now():%Y-%m-%d %H:%M:%S}"
-            )
+            # Customize email body based on type
+            if "Tracking Started" in product_name:
+                html_body = self._create_tracking_started_template(
+                    product_name.replace("Price Tracking Started: ", ""), 
+                    current_price, 
+                    target_price, 
+                    product_url
+                )
+                text_body = (
+                    f"Price Tracking Started!\n\n"
+                    f"Product: {product_name.replace('Price Tracking Started: ', '')}\n"
+                    f"Initial Price: ₹{current_price:.2f}\n"
+                    f"You'll receive notifications when the price drops!\n"
+                    f"Link: {product_url}\n\n"
+                    f"Sent by Price Tracker Pro on {datetime.now():%Y-%m-%d %H:%M:%S}"
+                )
+            else:
+                html_body = self._create_email_template(product_name, current_price, target_price, product_url)
+                text_body = (
+                    f"Price Drop Alert!\n\n"
+                    f"Product: {product_name}\n"
+                    f"Now: ₹{current_price:.2f}\n"
+                    f"Target: ₹{target_price:.2f}\n"
+                    f"Link: {product_url}\n\n"
+                    f"Sent by Price Tracker Pro on {datetime.now():%Y-%m-%d %H:%M:%S}"
+                )
 
             msg.attach(MIMEText(text_body, "plain"))
             msg.attach(MIMEText(html_body, "html"))
 
             with smtplib.SMTP(Config.SMTP_SERVER, Config.SMTP_PORT) as server:
                 server.starttls()
+                logger.info(f"Connecting to SMTP server: {Config.SMTP_SERVER}:{Config.SMTP_PORT}")
                 server.login(Config.EMAIL_ADDRESS, Config.EMAIL_PASSWORD)
+                logger.info("SMTP login successful")
                 server.send_message(msg)
+                logger.info(f"📧 Email message sent successfully to {recipient_email}")
 
-            logger.info(f"📧 Email sent successfully to {recipient_email}")
+            logger.info(f"✅ Email sent successfully to {recipient_email}")
             return True
 
-        except smtplib.SMTPAuthenticationError:
-            logger.error("SMTP authentication failed — check credentials.")
+        except smtplib.SMTPAuthenticationError as e:
+            error_msg = str(e)
+            logger.error(f"SMTP authentication failed — check credentials: {e}")
+            logger.error(f"Email: {Config.EMAIL_ADDRESS}, Server: {Config.SMTP_SERVER}:{Config.SMTP_PORT}")
+            if "username and password" in error_msg.lower() or "535" in error_msg:
+                logger.error("⚠️ This usually means you need to use a Gmail App Password, not your regular password!")
+                logger.error("Get App Password from: https://myaccount.google.com/apppasswords")
+        except smtplib.SMTPRecipientsRefused as e:
+            logger.error(f"Recipient email refused: {recipient_email} - {e}")
+        except smtplib.SMTPServerDisconnected as e:
+            logger.error(f"SMTP server disconnected: {e}")
+        except smtplib.SMTPConnectError as e:
+            logger.error(f"Cannot connect to SMTP server {Config.SMTP_SERVER}:{Config.SMTP_PORT} - {e}")
+            logger.error("Check your internet connection and firewall settings")
         except Exception as e:
             logger.error(f"Email sending error: {e}", exc_info=True)
+            logger.error(f"Error type: {type(e).__name__}")
 
         return False
+
+    def _create_tracking_started_template(
+        self,
+        product_name: str,
+        initial_price: float,
+        target_price: float,
+        product_url: str
+    ) -> str:
+        """HTML email template for tracking started notification"""
+        # Extract actual product name if it starts with "Price Tracking Started:"
+        display_name = product_name.replace("Price Tracking Started: ", "").strip()
+        
+        return f"""
+        <html><body style="font-family:Arial,sans-serif;">
+        <div style="background:linear-gradient(135deg,#10b981,#059669);color:white;padding:20px;border-radius:10px;">
+            <h2>✅ Product Price Tracking Started!</h2>
+            <p style="font-size:16px;">Your product is now being monitored for price drops on Amazon and Flipkart.</p>
+            <div style="background:white;color:#333;padding:20px;border-radius:8px;margin-top:15px;">
+                <h3 style="margin-top:0;">{display_name}</h3>
+                <p><b>Initial Price:</b> ₹{initial_price:.2f}</p>
+                <p><b>Tracking Status:</b> <span style="color:#10b981;font-weight:bold;">Active</span></p>
+                <p style="margin-top:20px;">✅ You will receive email notifications whenever the price drops on either Amazon or Flipkart!</p>
+                <a href="{product_url}" style="display:inline-block;background:#10b981;color:white;padding:12px 24px;text-decoration:none;border-radius:5px;margin-top:15px;">View Product</a>
+            </div>
+            <p style="margin-top:15px;font-size:12px;opacity:0.8;">Price Tracker Pro — {datetime.now():%d/%m/%Y %I:%M %p}</p>
+        </div></body></html>
+        """
 
     def _create_email_template(
         self,

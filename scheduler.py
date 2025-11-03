@@ -11,7 +11,8 @@ from datetime import datetime
 import schedule
 
 from database import db
-from scraper import scraper
+from dual_scraper import dual_scraper
+from price_comparator import price_comparator
 from notifications import notifier
 from config import Config
 
@@ -37,6 +38,8 @@ class PriceScheduler:
         self.jobs: Dict[int, schedule.Job] = {}
         self.check_counts: Dict[int, int] = {}
         self.frequency_minutes: int = 30  # Default check frequency
+        # Auto-start scheduler
+        self.start()
         logger.info(f"Scheduler initialized for user: {self.user_id}")
 
     # ==============================
@@ -137,7 +140,7 @@ class PriceScheduler:
     # PRICE CHECKING
     # ==============================
     def check_product(self, product_id: int) -> None:
-        """Scrape and update price data for a single product."""
+        """Scrape and update price data for a product from two sites."""
         try:
             product: Optional[Dict[str, Any]] = db.get_product(product_id)
             if not product:
@@ -145,49 +148,83 @@ class PriceScheduler:
                 return
 
             product_name: str = product.get("product_name", f"Product_{product_id}")
-            url: str = product.get("product_url", "")
-            target_price: float = float(product.get("target_price", 0) or 0.0)
-
-            if not url:
-                logger.warning(f"Product {product_id} has no valid URL.")
-                db.update_product_status(product_id, "Error: No URL")
+            url1: str = product.get("product_url", "")
+            url2: str = product.get("product_url2", "")
+            
+            # Check if tracking is enabled
+            is_tracking = product.get("is_tracking", 0)
+            if not is_tracking:
+                logger.debug(f"Product {product_id} tracking is disabled.")
                 return
 
-            current_price, name, currency, image_url = scraper.scrape_price(url) # type: ignore
-
-            if current_price is None:
-                db.update_product_status(product_id, "Error: Price unavailable")
-                notifier.send_error_notification(product_name, "Price unavailable.")
+            if not url1 or not url2:
+                logger.warning(f"Product {product_id} missing URLs.")
+                db.update_product_status(product_id, "Error: Missing URLs")
                 return
 
-            db.update_product_price(product_id, current_price, image_url or "")
+            # Get previous prices for comparison
+            previous_site1_price = product.get("site1_price", 0.0) or 0.0
+            previous_site2_price = product.get("site2_price", 0.0) or 0.0
 
-            # Update name if changed
-            if name and name != product_name:
-                db.update_product_name(product_id, name)
+            # Scrape both URLs simultaneously
+            result1, result2 = dual_scraper.scrape_dual_urls(url1, url2)
+            
+            site1_price = result1.get("price_value", 0.0) or 0.0
+            site2_price = result2.get("price_value", 0.0) or 0.0
+            site1_image = result1.get("image", "")
+            site2_image = result2.get("image", "")
+            
+            # Check for errors
+            if result1.get("error") and result2.get("error"):
+                db.update_product_status(product_id, "Error: Both sites failed")
+                notifier.send_error_notification(
+                    product_name,
+                    f"Failed to scrape both sites: {result1.get('error')[:50]}"
+                )
+                return
+            
+            # Update database with dual prices
+            db.update_dual_prices(
+                product_id,
+                site1_price,
+                site2_price,
+                site1_image,
+                site2_image
+            )
 
-            # Check for target price reached
-            if target_price > 0 and current_price <= target_price:
-                db.update_product_status(product_id, "Target Reached!")
-                notifier.send_price_alert(
-                    product_name=name or product_name,
-                    current_price=current_price,
-                    target_price=target_price,
-                    product_url=url,
-                    email_address=product.get("notification_email", ""),
-                    enable_sound=True,
-                    enable_desktop=True,
+            # Update product name if changed
+            new_name = result1.get("name") or result2.get("name")
+            if new_name and new_name != product_name:
+                db.update_product_name(product_id, new_name)
+
+            # Compare prices and check for drops
+            email = product.get("notification_email", "")
+            if email:
+                comparison = price_comparator.compare_prices(
+                    product_id=product_id,
+                    product_name=new_name or product_name,
+                    site1_price=site1_price,
+                    site2_price=site2_price,
+                    site1_url=url1,
+                    site2_url=url2,
+                    previous_site1_price=previous_site1_price if previous_site1_price > 0 else None,
+                    previous_site2_price=previous_site2_price if previous_site2_price > 0 else None,
+                    email=email
                 )
-                db.log_notification(
-                    product_id,
-                    "price_drop",
-                    f"Price dropped to {current_price} at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-                )
-            else:
-                db.update_product_status(product_id, "Tracking")
+                
+                if comparison.get("notification_sent"):
+                    db.log_notification(
+                        product_id,
+                        "price_drop",
+                        f"Price dropped on {comparison.get('cheaper_site', 'unknown')} - {comparison.get('message', '')}"
+                    )
+                    db.update_product_status(product_id, "Price Drop Detected!")
+                else:
+                    db.update_product_status(product_id, "Tracking")
 
             # Increment check counter
             self.check_counts[product_id] = self.check_counts.get(product_id, 0) + 1
+            logger.info(f"Checked product {product_id}: Site1=₹{site1_price}, Site2=₹{site2_price}")
 
         except Exception as e:
             db.update_product_status(product_id, f"Error: {str(e)[:60]}")

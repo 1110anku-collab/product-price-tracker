@@ -1,147 +1,143 @@
-"""
-scraper.py
------------
-Web scraper module for Price Tracker Pro
-
-- Supports Amazon, Flipkart, and generic e-commerce pages
-- Extracts product title, price, image, and availability
-- Includes error handling and fallbacks
-"""
-
+import time
 import re
-import requests
-from bs4 import BeautifulSoup
-from typing import Optional, Dict, Any
-from urllib.parse import urlparse
+import undetected_chromedriver as uc
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 
 class PriceScraper:
-    """Scraper class for fetching product data"""
-
-    HEADERS = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/118.0.0.0 Safari/537.36"
-        ),
-        "Accept-Language": "en-US,en;q=0.9",
-    }
-
     def __init__(self):
-        self.session = requests.Session()
-        self.session.headers.update(self.HEADERS)
+        chrome_options = Options()
+        chrome_options.add_argument("--headless=new")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        self.driver = uc.Chrome(options=chrome_options, version_main=142)
+        self.wait = WebDriverWait(self.driver, 15)
 
-    # -------------------------------
-    # Public Methods
-    # -------------------------------
-    def fetch_product(self, url: str) -> Optional[Dict[str, Any]]:
-        """Fetch product details from the given URL."""
+    def scrape_price(self, url: str):
+        """Main dispatcher — detects site and calls respective scraper."""
         try:
-            response = self.session.get(url, timeout=15)
-            response.raise_for_status()
-
-            soup = BeautifulSoup(response.text, "lxml")
-            domain = urlparse(url).netloc.lower()
-
-            if "flipkart" in domain:
-                return self._parse_flipkart(soup, url)
-            elif "amazon" in domain:
-                return self._parse_amazon(soup, url)
+            print(f"[INFO] Scraping started for: {url}")
+            if "amazon." in url:
+                return self._scrape_amazon(url)
+            elif "flipkart." in url:
+                return self._scrape_flipkart(url)
             else:
-                return self._parse_generic(soup, url)
+                raise ValueError("Unsupported website")
         except Exception as e:
-            print(f"[ERROR] Failed to fetch product: {e}")
-            return None
+            print(f"[ERROR] {e}")
+            return None, None, None, None
+        finally:
+            self.driver.quit()
 
-    # -------------------------------
-    # Parser Implementations
-    # -------------------------------
-    def _parse_flipkart(self, soup: BeautifulSoup, url: str) -> Dict[str, Any]:
-        title = soup.select_one("span.B_NuCI")
-        price = soup.select_one("div._30jeq3._16Jk6d")
+    # ---------------------------------------------------------------------
+    # Amazon scraper
+    # ---------------------------------------------------------------------
+    def _scrape_amazon(self, url: str):
+        self.driver.get(url)
 
-        name = title.get_text(strip=True) if title else "Unknown Product"
-        price_val = self._parse_price(price.get_text()) if price else None
-
-        return {
-            "name": name,
-            "url": url,
-            "price": price_val,
-            "image": self._image(soup),
-            "site": "Flipkart",
-        }
-
-    def _parse_amazon(self, soup: BeautifulSoup, url: str) -> Dict[str, Any]:
-        title = soup.select_one("#productTitle")
-        price = soup.select_one(".a-price .a-offscreen")
-
-        name = title.get_text(strip=True) if title else "Unknown Product"
-        price_val = self._parse_price(price.get_text()) if price else None
-
-        return {
-            "name": name,
-            "url": url,
-            "price": price_val,
-            "image": self._image(soup),
-            "site": "Amazon",
-        }
-
-    def _parse_generic(self, soup: BeautifulSoup, url: str) -> Dict[str, Any]:
-        # Fallback generic parser
-        title = soup.find("title")
-        prices = re.findall(r"₹\s?([\d,]+)", soup.get_text())
-        price_val = self._parse_price(prices[0]) if prices else None
-
-        return {
-            "name": title.get_text(strip=True) if title else "Unnamed Product",
-            "url": url,
-            "price": price_val,
-            "image": self._image(soup),
-            "site": "Generic",
-        }
-
-    # -------------------------------
-    # Helper Methods
-    # -------------------------------
-    def _image(self, soup: BeautifulSoup) -> Optional[str]:
-        """Extract the most relevant image URL from the page."""
-        img = soup.select_one("img[data-src], img[srcset], img[src]")
-        if not img:
-            return None
-
-        candidates = [
-            img.get("data-src"),
-            img.get("srcset"),
-            img.get("src"),
-        ]
-
-        for c in candidates:
-            if c and isinstance(c, str) and c.strip():
-                return c.strip()
-        return None
-
-    @staticmethod
-    def _parse_price(raw: str) -> Optional[float]:
-        """Convert a string like '₹1,299' to a float 1299.0"""
+        # Product title
         try:
-            clean = re.sub(r"[^\d.]", "", raw)
-            return float(clean)
-        except Exception:
-            return None
+            name_el = self.wait.until(
+                EC.presence_of_element_located((By.ID, "productTitle"))
+            )
+            name = name_el.text.strip()
+        except:
+            name = None
+
+        # Price
+        price_selectors = [
+            "#priceblock_ourprice",
+            "#priceblock_dealprice",
+            "span.a-price-whole",
+        ]
+        price = None
+        for sel in price_selectors:
+            try:
+                elem = self.driver.find_element(By.CSS_SELECTOR, sel)
+                if elem and elem.text.strip():
+                    price = elem.text.strip()
+                    break
+            except:
+                continue
+
+        # Image
+        try:
+            image_el = self.driver.find_element(By.ID, "landingImage")
+            image = image_el.get_attribute("src")
+        except:
+            image = None
+
+        currency = "INR"
+        print(f"[RESULT][Amazon] {name} - {price}")
+        return price, name, currency, image
+
+    # ---------------------------------------------------------------------
+    # Flipkart scraper
+    # ---------------------------------------------------------------------
+    def _scrape_flipkart(self, url: str):
+        self.driver.get(url)
+
+        # Close login popup if present
+        try:
+            time.sleep(2)
+            self.driver.find_element(By.CSS_SELECTOR, "button._2KpZ6l._2doB4z").click()
+        except:
+            pass
+
+        # Title
+        title_selectors = [
+            "span.B_NuCI",  # old layout
+            "span.VU-ZEz",  # new layout
+            "h1.yhB1nd",    # alternate layout
+        ]
+        name = None
+        for sel in title_selectors:
+            try:
+                elem = self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, sel)))
+                if elem and elem.text.strip():
+                    name = elem.text.strip()
+                    break
+            except:
+                continue
+
+        # Price
+        price_selectors = [
+            "div._30jeq3._16Jk6d",  # standard layout
+            "div.Nx9bqj.CxhGGd",    # new layout
+            "div.UOCQB5",           # fallback
+        ]
+        price = None
+        for sel in price_selectors:
+            try:
+                elem = self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, sel)))
+                if elem and elem.text.strip():
+                    price = elem.text.strip()
+                    break
+            except:
+                continue
+
+        # Image
+        try:
+            img_el = self.driver.find_element(By.CSS_SELECTOR, "img._396cs4._2amPTt._3qGmMb")
+            image = img_el.get_attribute("src")
+        except:
+            image = None
+
+        currency = "INR"
+        print(f"[RESULT][Flipkart] {name} - {price}")
+        return price, name, currency, image
 
 
-# --------------------------------------------------
-# Module-level Helper
-# --------------------------------------------------
-scraper = PriceScraper()
-
-def get_product_data(url: str) -> Optional[Dict[str, Any]]:
-    """Convenience function for other modules."""
-    return scraper.fetch_product(url)
-
-
+# ---------------------------------------------------------------------
+# Standalone test (manual run)
+# ---------------------------------------------------------------------
 if __name__ == "__main__":
-    # For quick testing
-    test_url = "https://www.flipkart.com/"
-    data = get_product_data(test_url)
-    print(data)
+    scraper = PriceScraper()
+
+    test_url = "https://www.flipkart.com/samsung-galaxy-s23-ultra-5g-green-256-gb/p/itm0f3946a5d0a7a"
+    result = scraper.scrape_price(test_url)
+    print("[FINAL RESULT]", result)

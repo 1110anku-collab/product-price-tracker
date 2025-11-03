@@ -49,17 +49,58 @@ class Database:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id INTEGER,
                     product_name TEXT,
-                    product_url TEXT UNIQUE,
+                    product_url TEXT,
+                    product_url2 TEXT,
+                    site1_name TEXT,
+                    site2_name TEXT,
+                    site1_price REAL,
+                    site2_price REAL,
+                    site1_image TEXT,
+                    site2_image TEXT,
                     target_price REAL,
                     current_price REAL,
                     currency TEXT,
                     image_url TEXT,
                     status TEXT DEFAULT 'Tracking',
                     notification_email TEXT,
-                    last_checked TEXT
+                    last_checked TEXT,
+                    is_tracking INTEGER DEFAULT 0
                 )
                 """
             )
+            # Add new columns to existing table if they don't exist
+            try:
+                cursor.execute("ALTER TABLE products ADD COLUMN product_url2 TEXT")
+            except:
+                pass
+            try:
+                cursor.execute("ALTER TABLE products ADD COLUMN site1_name TEXT")
+            except:
+                pass
+            try:
+                cursor.execute("ALTER TABLE products ADD COLUMN site2_name TEXT")
+            except:
+                pass
+            try:
+                cursor.execute("ALTER TABLE products ADD COLUMN site1_price REAL")
+            except:
+                pass
+            try:
+                cursor.execute("ALTER TABLE products ADD COLUMN site2_price REAL")
+            except:
+                pass
+            try:
+                cursor.execute("ALTER TABLE products ADD COLUMN site1_image TEXT")
+            except:
+                pass
+            try:
+                cursor.execute("ALTER TABLE products ADD COLUMN site2_image TEXT")
+            except:
+                pass
+            try:
+                cursor.execute("ALTER TABLE products ADD COLUMN is_tracking INTEGER DEFAULT 0")
+            except:
+                pass
             cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS price_history (
@@ -92,25 +133,40 @@ class Database:
         user_id: int,
         product_name: str,
         product_url: str,
-        target_price: float,
+        product_url2: str = "",
+        target_price: float = 0.0,
         notification_email: str = "",
+        site1_name: str = "",
+        site2_name: str = "",
+        site1_price: float = 0.0,
+        site2_price: float = 0.0,
+        site1_image: str = "",
+        site2_image: str = "",
     ) -> Optional[int]:
-        """Add a new product to track."""
+        """Add a new product to track (supports dual URLs)."""
         try:
             with self._connect() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
                     """
-                    INSERT OR IGNORE INTO products
-                    (user_id, product_name, product_url, target_price, notification_email, last_checked)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    INSERT INTO products
+                    (user_id, product_name, product_url, product_url2, target_price, notification_email,
+                     site1_name, site2_name, site1_price, site2_price, site1_image, site2_image, last_checked)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         user_id,
                         product_name,
                         product_url,
+                        product_url2,
                         target_price,
                         notification_email,
+                        site1_name,
+                        site2_name,
+                        site1_price,
+                        site2_price,
+                        site1_image,
+                        site2_image,
                         datetime.now().isoformat(),
                     ),
                 )
@@ -120,7 +176,7 @@ class Database:
                 return product_id
         except Exception as e:
             logger.exception(f"Error adding product: {e}")
-            return product_id
+            return None
 
     def delete_product(self, product_id: int) -> None:
         try:
@@ -180,6 +236,48 @@ class Database:
             conn.execute(
                 "INSERT INTO price_history (product_id, price, timestamp) VALUES (?, ?, ?)",
                 (product_id, current_price, datetime.now().isoformat()),
+            )
+
+    def update_dual_prices(
+        self,
+        product_id: int,
+        site1_price: float,
+        site2_price: float,
+        site1_image: str = "",
+        site2_image: str = ""
+    ) -> None:
+        """Update prices from both sites"""
+        with self._connect() as conn:
+            # Determine current_price as the minimum of both
+            current_price = min(site1_price, site2_price) if site1_price > 0 and site2_price > 0 else (site1_price if site1_price > 0 else site2_price)
+            
+            conn.execute(
+                """
+                UPDATE products
+                SET site1_price = ?, site2_price = ?, current_price = ?,
+                    site1_image = ?, site2_image = ?, last_checked = ?
+                WHERE id = ?
+                """,
+                (site1_price, site2_price, current_price, site1_image, site2_image, datetime.now().isoformat(), product_id),
+            )
+            # Log both prices in history
+            if site1_price > 0:
+                conn.execute(
+                    "INSERT INTO price_history (product_id, price, timestamp) VALUES (?, ?, ?)",
+                    (product_id, site1_price, datetime.now().isoformat()),
+                )
+            if site2_price > 0:
+                conn.execute(
+                    "INSERT INTO price_history (product_id, price, timestamp) VALUES (?, ?, ?)",
+                    (product_id, site2_price, datetime.now().isoformat()),
+                )
+
+    def set_tracking_status(self, product_id: int, is_tracking: bool) -> None:
+        """Set whether product is being tracked"""
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE products SET is_tracking = ? WHERE id = ?",
+                (1 if is_tracking else 0, product_id),
             )
 
     def update_product_name(self, product_id: int, new_name: str) -> None:
