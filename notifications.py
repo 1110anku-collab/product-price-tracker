@@ -36,6 +36,8 @@ class NotificationManager:
     def __init__(self) -> None:
         self.email_enabled: bool = Config.validate_email_config()
         self.sound_enabled: bool = getattr(Config, "ENABLE_SOUND", True)
+        # Stores the most recent email error for UI display
+        self.last_email_error: Optional[str] = None
 
     # --------------------------------------------------------------------------
     # 🔔 Compatibility Wrapper for GUI & Scheduler
@@ -132,23 +134,30 @@ class NotificationManager:
         recipient_email: str
     ) -> bool:
         """Send email notification for price change."""
+        # Reset last error at the start
+        self.last_email_error = None
+
         # Check email configuration
         if not Config.EMAIL_ADDRESS or not Config.EMAIL_PASSWORD:
             logger.error("Email configuration missing: EMAIL_ADDRESS or EMAIL_PASSWORD not set in .env file")
+            self.last_email_error = "EMAIL_ADDRESS or EMAIL_PASSWORD is missing in .env"
             return False
             
         if not Config.validate_email_config():
             logger.error(f"Email configuration invalid. EMAIL_ADDRESS: {Config.EMAIL_ADDRESS[:5]}...@..., Password set: {bool(Config.EMAIL_PASSWORD)}")
+            self.last_email_error = "Invalid email configuration (.env)"
             return False
             
         if not self.email_enabled:
             logger.warning("Email configuration not valid — skipping email alert.")
+            self.last_email_error = "Email disabled due to invalid configuration"
             return False
 
         try:
             # Validate recipient email
             if not recipient_email or "@" not in recipient_email:
                 logger.error(f"Invalid recipient email: {recipient_email}")
+                self.last_email_error = "Recipient email address is invalid"
                 return False
             
             msg = MIMEMultipart("alternative")
@@ -210,16 +219,21 @@ class NotificationManager:
             if "username and password" in error_msg.lower() or "535" in error_msg:
                 logger.error("⚠️ This usually means you need to use a Gmail App Password, not your regular password!")
                 logger.error("Get App Password from: https://myaccount.google.com/apppasswords")
+            self.last_email_error = f"SMTP auth failed: {error_msg}"
         except smtplib.SMTPRecipientsRefused as e:
             logger.error(f"Recipient email refused: {recipient_email} - {e}")
+            self.last_email_error = f"Recipient refused: {e}"
         except smtplib.SMTPServerDisconnected as e:
             logger.error(f"SMTP server disconnected: {e}")
+            self.last_email_error = f"SMTP disconnected: {e}"
         except smtplib.SMTPConnectError as e:
             logger.error(f"Cannot connect to SMTP server {Config.SMTP_SERVER}:{Config.SMTP_PORT} - {e}")
             logger.error("Check your internet connection and firewall settings")
+            self.last_email_error = f"SMTP connect error: {e}"
         except Exception as e:
             logger.error(f"Email sending error: {e}", exc_info=True)
             logger.error(f"Error type: {type(e).__name__}")
+            self.last_email_error = f"{type(e).__name__}: {e}"
 
         return False
 

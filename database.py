@@ -147,9 +147,11 @@ class Database:
         try:
             with self._connect() as conn:
                 cursor = conn.cursor()
+                # Try to insert; if UNIQUE constraint exists on product_url in older DBs,
+                # this will be ignored and we'll update the existing row instead.
                 cursor.execute(
                     """
-                    INSERT INTO products
+                    INSERT OR IGNORE INTO products
                     (user_id, product_name, product_url, product_url2, target_price, notification_email,
                      site1_name, site2_name, site1_price, site2_price, site1_image, site2_image, last_checked)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -171,9 +173,51 @@ class Database:
                     ),
                 )
                 product_id = int(cursor.lastrowid or 0)
-                conn.commit()
-                logger.info(f"Added product: {product_name} (ID: {product_id})")
-                return product_id
+                if product_id == 0:
+                    # Already exists; find existing row by primary URL first
+                    cursor.execute("SELECT id FROM products WHERE product_url = ?", (product_url,))
+                    row = cursor.fetchone()
+                    if not row and product_url2:
+                        cursor.execute("SELECT id FROM products WHERE product_url = ?", (product_url2,))
+                        row = cursor.fetchone()
+                    if row:
+                        product_id = int(row["id"]) if isinstance(row, sqlite3.Row) else int(row[0])
+                        # Update the existing product with latest details
+                        cursor.execute(
+                            """
+                            UPDATE products
+                            SET user_id = ?, product_name = ?, product_url2 = ?, target_price = ?,
+                                notification_email = ?, site1_name = ?, site2_name = ?,
+                                site1_price = ?, site2_price = ?, site1_image = ?, site2_image = ?,
+                                last_checked = ?, is_tracking = COALESCE(is_tracking, 0)
+                            WHERE id = ?
+                            """,
+                            (
+                                user_id,
+                                product_name,
+                                product_url2,
+                                target_price,
+                                notification_email,
+                                site1_name,
+                                site2_name,
+                                site1_price,
+                                site2_price,
+                                site1_image,
+                                site2_image,
+                                datetime.now().isoformat(),
+                                product_id,
+                            ),
+                        )
+                        conn.commit()
+                        logger.info(f"Updated existing product (ID: {product_id}) for URL conflict")
+                        return product_id
+                    else:
+                        # Could not locate existing row; surface a helpful error
+                        raise sqlite3.IntegrityError("Duplicate URL but existing record not found")
+                else:
+                    conn.commit()
+                    logger.info(f"Added product: {product_name} (ID: {product_id})")
+                    return product_id
         except Exception as e:
             logger.exception(f"Error adding product: {e}")
             return None

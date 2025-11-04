@@ -2,6 +2,7 @@
 Dual Site Price Tracker - Enhanced Colorful GUI
 Scrapes and compares prices from 2 websites simultaneously
 """
+# pyright: reportMissingImports=false
 
 import tkinter as tk
 from tkinter import messagebox, filedialog
@@ -9,7 +10,6 @@ import customtkinter as ctk
 import threading
 import logging
 import csv
-import pandas as pd
 from pathlib import Path
 from typing import Any, Dict, Optional, List
 from datetime import datetime
@@ -708,10 +708,11 @@ SMTP_PORT=587
                                     "3. Restart the application"
                                 )
                             
-                            # Reload config after creating .env
+                            # Reload config after creating .env (if method exists)
                             try:
-                                Config.reload_env()
-                            except:
+                                if hasattr(Config, "reload_env"):
+                                    Config.reload_env()  # type: ignore[attr-defined]
+                            except Exception:
                                 pass
                             
                             return  # Don't send email if .env was just created
@@ -754,20 +755,21 @@ SMTP_PORT=587
                         if email_sent:
                             logger.info(f"✅ Tracking started email sent to {self.tracked_email}")
                         else:
-                            # Read latest error from log to show user
-                            log_file = Config.LOGS_DIR / "notifications.log"
-                            error_details = "Unknown error"
-                            try:
-                                if log_file.exists():
-                                    with open(log_file, 'r', encoding='utf-8') as f:
-                                        lines = f.readlines()
-                                        # Get last few error lines
-                                        error_lines = [l for l in lines[-10:] if 'error' in l.lower() or 'failed' in l.lower()]
-                                        if error_lines:
-                                            error_details = error_lines[-1].strip()
-                            except:
-                                pass
-                            
+                            # Prefer the precise error from notifier if available
+                            error_details = getattr(notifier, "last_email_error", None) or "Unknown error"
+                            # Fallback: try reading recent log lines
+                            if error_details == "Unknown error":
+                                log_file = Config.LOGS_DIR / "notifications.log"
+                                try:
+                                    if log_file.exists():
+                                        with open(log_file, 'r', encoding='utf-8') as f:
+                                            lines = f.readlines()
+                                            error_lines = [l for l in lines[-15:] if 'error' in l.lower() or 'failed' in l.lower()]
+                                            if error_lines:
+                                                error_details = error_lines[-1].strip()
+                                except Exception:
+                                    pass
+
                             messagebox.showwarning(
                                 "❌ Email Send Failed",
                                 f"Could not send email to {self.tracked_email}.\n\n"
@@ -830,7 +832,24 @@ SMTP_PORT=587
                 # Reload product list
                 self.load_product_list()
             else:
-                messagebox.showerror("Error", "Failed to save product to database.")
+                # Try to surface a helpful reason from database logs
+                error_details = "Unknown error"
+                try:
+                    from config import Config as _Cfg
+                    log_file = _Cfg.LOGS_DIR / "database.log"
+                    if log_file.exists():
+                        with open(log_file, "r", encoding="utf-8") as f:
+                            lines = f.readlines()
+                            err_lines = [l for l in lines[-20:] if "ERROR" in l or "Exception" in l]
+                            if err_lines:
+                                error_details = err_lines[-1].strip()
+                except Exception:
+                    pass
+
+                messagebox.showerror(
+                    "Error",
+                    f"Failed to save product to database.\n\nDetails: {error_details}"
+                )
                 
         except Exception as e:
             messagebox.showerror("Error", f"Failed to start tracking:\n{e}")
@@ -1053,6 +1072,14 @@ SMTP_PORT=587
 
     def _upload_csv_file(self):
         """Upload and parse CSV file"""
+        try:
+            import pandas as pd  # local import to avoid global linter issue
+        except Exception:
+            messagebox.showerror(
+                "Missing dependency",
+                "pandas is not installed.\n\nInstall it with:\n    pip install pandas"
+            )
+            return
         file_path = filedialog.askopenfilename(
             title="Select CSV File",
             filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
@@ -1081,6 +1108,14 @@ SMTP_PORT=587
 
     def _start_csv_tracking(self):
         """Start tracking products from CSV"""
+        try:
+            import pandas as pd  # local import to avoid global linter issue
+        except Exception:
+            messagebox.showerror(
+                "Missing dependency",
+                "pandas is not installed.\n\nInstall it with:\n    pip install pandas"
+            )
+            return
         if not self.csv_file_path:
             messagebox.showwarning("No File", "Please upload a CSV file first.")
             return
@@ -1405,6 +1440,14 @@ SMTP_PORT=587
     def _export_to_excel(self):
         """Export all products to Excel"""
         try:
+            try:
+                import pandas as pd  # local import to avoid global linter issues
+            except Exception:
+                messagebox.showerror(
+                    "Missing dependency",
+                    "pandas is not installed.\n\nInstall it with:\n    pip install pandas"
+                )
+                return
             products = db.get_user_products(self.user["id"])
             if not products:
                 messagebox.showwarning("No Data", "No products to export.")
@@ -1430,6 +1473,14 @@ SMTP_PORT=587
             )
             
             if file_path:
+                try:
+                    import pandas as pd  # local import to ensure availability
+                except Exception:
+                    messagebox.showerror(
+                        "Missing dependency",
+                        "pandas is not installed.\n\nInstall it with:\n    pip install pandas"
+                    )
+                    return
                 df = pd.DataFrame(data)
                 df.to_excel(file_path, index=False)
                 messagebox.showinfo("Success", f"Products exported to:\n{file_path}")
